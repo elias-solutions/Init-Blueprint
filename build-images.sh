@@ -64,6 +64,7 @@ PROJECTS=(
   "blueprint-net-api:latest|NET-Blueprint/NET.Backend.Blueprint.Api/Dockerfile|NET-Blueprint|publish_net_api NET.Backend.Blueprint.Api"
   "blueprint-net-minimal-api:latest|NET-Blueprint/NET.Backend.Blueprint.Minimal.Api/Dockerfile|NET-Blueprint|publish_net_api NET.Backend.Blueprint.Minimal.Api"
   "blueprint-java-api:latest|Java-Blueprint/Dockerfile|Java-Blueprint|package_java_api"
+  "blueprint-ai-api:latest|Python-Blueprint/Dockerfile|Python-Blueprint|true"
 )
 
 FAILED=()

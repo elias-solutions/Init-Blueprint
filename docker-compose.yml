@@ -47,6 +47,42 @@ services:
       timeout: 5s
       retries: 30
 
+  # Local LLM for the Angular AI chat (OpenAI-compatible API under /v1). Models persist in ollama-data.
+  ollama:
+    image: ollama/ollama:0.40.6
+    container_name: blueprint-ollama
+    environment:
+      OLLAMA_CONTEXT_LENGTH: "8192"
+      OLLAMA_KEEP_ALIVE: 30m
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: pulls the chat model into ollama-data (no-op once it is present).
+  ollama-pull:
+    image: ollama/ollama:0.40.6
+    container_name: blueprint-ollama-pull
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "qwen3:8b"]
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+
   net-api:
     image: blueprint-net-api:latest
     container_name: blueprint-net-api
@@ -90,5 +126,25 @@ services:
       postgres:
         condition: service_healthy
 
+  # AI gateway for the Angular chat: forwards to Ollama or OpenAI. OPENAI_API_KEY comes from ./.env.
+  ai-api:
+    image: blueprint-ai-api:latest
+    container_name: blueprint-ai-api
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/blueprint
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/blueprint/protocol/openid-connect/certs
+    ports:
+      - "5300:8080"
+    depends_on:
+      <<: *keycloak-backend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-data:
+  ollama-data:

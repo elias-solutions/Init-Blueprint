@@ -177,8 +177,9 @@ features/persons/
   data/          PersonApi-Abstraktion, BlueprintPersonApi (Strategy je BackendKind), Resolver
   state/         PersonsStore (Signals)
   ui/            Liste, Detail, Person-/Adress-Dialog, person-labels.ts, field-limits.ts
+features/chat/   KI-Assistent (siehe unten)
 i18n/            de.ts/en.ts, LanguageService, provideI18n(), localDate-Pipe, Paginator-Texte
-layout/          Backend- und Sprachumschalter (Toolbar)
+layout/          Backend- und Sprachumschalter, Chat-Toggle (Toolbar)
 shared/          AppDialog, ConfirmDialog, LocalizedDateAdapter, Validatoren
 ```
 
@@ -265,6 +266,28 @@ importieren `translocoTesting()` (`i18n/testing`) – echte Übersetzungen, vorg
 > `@jsverse/` in `transformIgnorePatterns` freigeben, sonst „Must use import to load ES Module“.
 > Dasselbe gilt für `keycloak-js/`.
 
+**KI-Assistent (lokales LLM)**
+
+- Seitenpanel (`mat-sidenav` rechts, `@defer` beim ersten Öffnen), Modell `qwen3:8b` über Ollama
+  (Compose-Service `ollama`, OpenAI-kompatible API `/v1/chat/completions`, Angular-Proxy `/llm`).
+  Die gesamte Logik läuft im Browser; kein neues Backend.
+- `LlmClient` (Abstraktion) → `OpenAiLlmClient`. `ChatSession` führt die Schleife
+  LLM → Tool-Calls → Ergebnisse → LLM (max. 6 Runden); der System-Prompt (`ChatSystemPrompt`)
+  nennt Benutzer, Sprache, Rechte und das Datum und wird pro Anfrage neu gebaut.
+- **Rechte = Rechte des Benutzers:** jedes Tool ist eine `ChatTool`-Strategie mit `permission`
+  (`read`/`write`/`delete`). `ToolPermissionPolicy` bildet das auf `AuthSession` + Backend-Capability
+  ab, `ChatToolRegistry` bietet dem Modell nur erlaubte Tools an und lehnt andere Aufrufe ab.
+  Die Tools nutzen die `PersonApi` mit dem Bearer-Token → das Backend prüft zusätzlich.
+- Neues Tool: `ChatTool` implementieren (Argumente über `ToolArguments` validieren – Fehler gehen
+  als `{ error }` ans Modell zurück, damit es korrigieren kann), in `provide-chat.ts` registrieren,
+  Label in `chat.tools` (de/en) ergänzen.
+- Schreibende Tools melden Änderungen über `PersonChanges`; Liste und Detail laden dann neu.
+- **Erkenntnisse mit qwen3:8b (6 GB VRAM):** `reasoning_effort: "none"` (in `config.json`) ist
+  ~3× schneller bei gleich guten Tool-Calls. Der Standard-Kontext von Ollama (4096) ist für die
+  Tool-Definitionen zu knapp → `OLLAMA_CONTEXT_LENGTH=8192`. Das Modell feuert gern mehrere
+  Tool-Calls parallel und rät dabei IDs → `create_person` nimmt Adressen direkt mit, und der
+  Prompt verlangt IDs nur aus Tool-Ergebnissen.
+
 ---
 
 ## 5. Betrieb
@@ -276,6 +299,7 @@ importieren `translocoTesting()` (`i18n/testing`) – echte Übersetzungen, vorg
 | NET Minimal-API | 5206 | `/backend/net-minimal-api` |
 | Java-API | 5105 | `/backend/java` |
 | Keycloak | 8180 | – (Realm `blueprint`, Admin-Konsole `keycloak`/`keycloak`) |
+| Ollama | 11434 | `/llm` (Modell `qwen3:8b`) |
 | Angular Dev-Server | 4200 | – |
 
 - in `Init-Blueprint`: `docker compose up -d` – PostgreSQL, Keycloak + alle APIs (APIs starten erst, wenn Keycloak
@@ -306,3 +330,4 @@ importieren `translocoTesting()` (`i18n/testing`) – echte Übersetzungen, vorg
 - Keycloak statt Auth-Stub: Realm-Import, JWT-Validierung in allen drei Backends (`standard`
   liest, `admin` schreibt), Login/Logout in Angular; `auditUserId` aus `config.json` entfällt
   (Audit-Id = Keycloak-`sub`).
+- KI-Assistent in Angular mit lokalem `qwen3:8b` (Ollama in Compose); Tools nach Benutzerrolle.
