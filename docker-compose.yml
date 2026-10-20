@@ -1,0 +1,94 @@
+name: blueprint
+
+x-keycloak-backend: &keycloak-backend
+  keycloak:
+    condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: blueprint-postgres
+    environment:
+      POSTGRES_USER: blueprint
+      POSTGRES_PASSWORD: blueprint
+      POSTGRES_DB: blueprint_net
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./setup/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blueprint -d blueprint_net"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Realm "blueprint" is imported from setup/keycloak/blueprint-export.json. No data volume (dev-file DB
+  # inside the container): every newly created container starts empty and re-reads the export.
+  # Browser and tokens use http://localhost:8180 (issuer); the APIs fetch keys via http://keycloak:8080.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    container_name: blueprint-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: dev-file
+      KC_BOOTSTRAP_ADMIN_USERNAME: keycloak
+      KC_BOOTSTRAP_ADMIN_PASSWORD: keycloak
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./setup/keycloak/blueprint-export.json:/opt/keycloak/data/import/blueprint-export.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  net-api:
+    image: blueprint-net-api:latest
+    container_name: blueprint-net-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=blueprint_net;Username=blueprint;Password=blueprint
+      Authentication__Schemes__Bearer__MetadataAddress: http://keycloak:8080/realms/blueprint/.well-known/openid-configuration
+    ports:
+      - "5102:8080"
+    depends_on:
+      <<: *keycloak-backend
+      postgres:
+        condition: service_healthy
+
+  net-minimal-api:
+    image: blueprint-net-minimal-api:latest
+    container_name: blueprint-net-minimal-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=blueprint_net;Username=blueprint;Password=blueprint
+      Authentication__Schemes__Bearer__MetadataAddress: http://keycloak:8080/realms/blueprint/.well-known/openid-configuration
+    ports:
+      - "5206:8080"
+    depends_on:
+      <<: *keycloak-backend
+      postgres:
+        condition: service_healthy
+
+  java-api:
+    image: blueprint-java-api:latest
+    container_name: blueprint-java-api
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/blueprint_java
+      SPRING_DATASOURCE_USERNAME: blueprint
+      SPRING_DATASOURCE_PASSWORD: blueprint
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/blueprint/protocol/openid-connect/certs
+    ports:
+      - "5105:8080"
+    depends_on:
+      <<: *keycloak-backend
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
