@@ -26,6 +26,17 @@ docker compose up -d    # nur starten (Images müssen existieren)
 docker compose down     # stoppen
 ```
 
+Einzelner Service (Namen: `postgres`, `keycloak`, `net-api`, `net-minimal-api`, `java-api`):
+
+```bash
+docker compose down java-api       # stoppen und Container entfernen
+docker compose stop java-api       # nur stoppen, Container bleibt
+docker compose up -d java-api      # wieder starten
+```
+
+`docker compose down <service>` ist ab Docker Compose 2.20 verfügbar. Abhängige Services werden
+nicht mitgestoppt; Volumes bleiben erhalten.
+
 Voraussetzungen: Docker (oder Podman + `podman-compose`, wird bevorzugt), .NET 10 SDK mit
 `dotnet-ef`, Java 21. Das Skript führt `dotnet publish` und `./mvnw package` selbst aus.
 
