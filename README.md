@@ -3,6 +3,17 @@
 Compose-Umgebung und Build-Skript für die Blueprint-Projekte: PostgreSQL, Keycloak und alle
 Backend-APIs. Gesamtübersicht (REST-Vertrag, Architektur, Konventionen) in [Blueprint.md](Blueprint.md).
 
+## Voraussetzungen
+
+| Software | Version | Wofür |
+|---|---|---|
+| Docker Desktop (oder Podman + `podman-compose`) | Compose ≥ 2.20 | Container; Podman wird bevorzugt, falls installiert |
+| .NET SDK | 10 | `dotnet publish` der NET-APIs |
+| `dotnet-ef` | 10 | EF-Core-Migration (`dotnet tool install --global dotnet-ef`) |
+| Java JDK | 21 | `./mvnw package` der Java-API (Maven lädt der Wrapper selbst) |
+| Bash | – | `build-images.sh`; unter Windows Git Bash |
+| Node.js | `^20.19.0`, `^22.12.0` oder `>=24.0.0` | nur für das Frontend (`Angular-Blueprint`, Angular 21) |
+
 ## Ordnerstruktur
 
 Die Projekte liegen als Geschwister neben `Init-Blueprint`:
@@ -37,8 +48,7 @@ docker compose up -d java-api      # wieder starten
 `docker compose down <service>` ist ab Docker Compose 2.20 verfügbar. Abhängige Services werden
 nicht mitgestoppt; Volumes bleiben erhalten.
 
-Voraussetzungen: Docker (oder Podman + `podman-compose`, wird bevorzugt), .NET 10 SDK mit
-`dotnet-ef`, Java 21. Das Skript führt `dotnet publish` und `./mvnw package` selbst aus.
+Das Skript führt `dotnet publish` und `./mvnw package` selbst aus.
 
 ## Dienste
 
