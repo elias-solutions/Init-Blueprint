@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds the API images (publish → image build), applies the EF Core migrations
-# to the compose Postgres and starts all compose services.
+# Builds the API images (publish → image build), starts all compose services
+# and then applies the EF Core migrations to the compose Postgres.
 # Existing images are skipped unless --force is given.
 # Usage: ./build-images.sh [-f|--force]
 set -uo pipefail
@@ -42,8 +42,6 @@ package_java_api() {
 }
 
 migrate_net_database() {
-  $COMPOSE_ENGINE -f "$ROOT/docker-compose.yml" up -d postgres || return 1
-
   echo "Waiting for postgres"
   local ready=false
   for _ in {1..30}; do
@@ -94,10 +92,6 @@ for proj in "${PROJECTS[@]}"; do
   ) || { echo "ERROR: failed to process $IMAGE"; FAILED+=("$IMAGE"); }
 done
 
-echo ""
-echo "=== EF Core migrations (blueprint_net) ==="
-migrate_net_database || { echo "ERROR: EF Core migration failed"; FAILED+=("ef-migrations"); }
-
 if (( ${#FAILED[@]} > 0 )); then
   echo ""
   echo "Failed: ${FAILED[*]}"
@@ -106,4 +100,8 @@ fi
 
 echo ""
 echo "=== Starting services ==="
-$COMPOSE_ENGINE -f "$ROOT/docker-compose.yml" up -d
+$COMPOSE_ENGINE -f "$ROOT/docker-compose.yml" up -d || { echo "ERROR: failed to start services"; exit 1; }
+
+echo ""
+echo "=== EF Core migrations (blueprint_net) ==="
+migrate_net_database || { echo "ERROR: EF Core migration failed"; exit 1; }
